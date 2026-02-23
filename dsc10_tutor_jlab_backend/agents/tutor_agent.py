@@ -3,11 +3,11 @@ from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
 
+# from ..tools.tools import TOOL_LIST
+from ..conversation_store import append_message, get_history, reset_history
 from ..gemini_client import get_gemini_model
 from ..prompts import PROMPT_MAP
-
-# from ..tools.tools import TOOL_LIST
-from ..conversation_store import get_history, append_message, reset_history
+from ..validators import validate_response
 
 
 async def ask_tutor(
@@ -73,9 +73,60 @@ Student question:
 
     text = "".join(response_parts)
 
+    # Validate response for babypandas compliance
+    is_valid, validation_result = validate_response(text, raise_on_violations=False)
+    
+    # If violations found, get corrected response in separate call
+    if not is_valid:
+        violations_list = ", ".join(validation_result["violations"])
+        correction_prompt = f"""The student asked: {student_question}
+
+Your previous response:
+{text}
+
+---
+
+Your previous response contained these pandas-only methods not available in babypandas: {violations_list}
+
+Please provide a corrected response using only babypandas-compatible methods. Important reminders:
+- Use `.get(column)` instead of bracket indexing `df[column]`
+- Use `.assign()` to create or modify columns
+- Use `.groupby()` for aggregations"""
+
+        # Create separate agent for correction (separate token count)
+        correction_agent = Agent(
+            name="dsc10_tutor",
+            model=get_gemini_model(),
+            instruction=system_prompt,
+        )
+
+        correction_session = InMemorySessionService()
+        correction_runner = Runner(
+            agent=correction_agent,
+            app_name="dsc10-tutor-correction",
+            session_service=correction_session,
+            auto_create_session=True
+        )
+
+        correction_content = types.Content(role='user', parts=[types.Part(text=correction_prompt)])
+        
+        response_parts = []
+        async for event in correction_runner.run_async(
+            user_id="student",
+            session_id="correction",
+            new_message=correction_content
+        ):
+            if hasattr(event, 'content') and event.content:
+                for part in event.content.parts:
+                    if hasattr(part, 'text') and part.text:
+                        response_parts.append(part.text)
+        
+        text = "".join(response_parts)
+
     append_message(conversation_id, student_question, text)
 
     return {
         "tutor_response": text,
         "conversation_id": conversation_id,
+        "validation": validation_result,
     }
