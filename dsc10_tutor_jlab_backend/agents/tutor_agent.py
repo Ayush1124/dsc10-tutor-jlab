@@ -73,12 +73,11 @@ Student question:
 
     text = "".join(response_parts)
 
-    # Validate response for babypandas compliance
     is_valid, validation_result = validate_response(text, raise_on_violations=False)
     
-    # If violations found, get corrected response in separate call
     if not is_valid:
         violations_list = ", ".join(validation_result["violations"])
+        print(f"Validation failed. Found banned methods: {violations_list}")
         correction_prompt = f"""The student asked: {student_question}
 
 Your previous response:

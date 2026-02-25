@@ -10,7 +10,6 @@ BANNED_METHODS = {
 
 
 def extract_code_blocks(text: str) -> list:
-    """Extract code blocks from markdown (text between triple backticks)."""
     pattern = r"```(?:\w+)?\s*\n(.*?)\n```"
     return [match.group(1) for match in re.finditer(pattern, text, re.DOTALL)]
 
@@ -21,7 +20,6 @@ def check_pandas_only_methods(text: str) -> dict:
     
     for block in code_blocks:
         for method in BANNED_METHODS:
-            # Match .method_name( patterns
             if re.search(rf"\.{method}\s*\(", block):
                 violations.append(method)
     
@@ -33,19 +31,6 @@ def check_pandas_only_methods(text: str) -> dict:
 
 
 def validate_response(text: str, raise_on_violations: bool = False) -> tuple:
-    """
-    Validate a Gemini response for pandas-only methods.
-    
-    Args:
-        text: The response text to validate
-        raise_on_violations: If True, raise exception if violations found
-        
-    Returns:
-        tuple: (is_valid, validation_result_dict)
-        
-    Raises:
-        ValueError: If raise_on_violations=True and violations found
-    """
     result = check_pandas_only_methods(text)
     
     if raise_on_violations and result["found_issues"]:
