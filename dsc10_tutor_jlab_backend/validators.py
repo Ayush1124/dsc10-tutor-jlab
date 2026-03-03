@@ -5,7 +5,7 @@ BANNED_METHODS = {
     "rename", "fillna", "dropna", "pivot_table", "melt",
     "stack", "unstack", "iloc", "loc", "apply", "map",
     "astype", "copy", "concat", "merge", "rolling",
-    "expanding", "resample", "query", "eval", "transform",
+    "expanding", "resample", "query", "eval", "transform", "aggregate"
 }
 
 
@@ -22,6 +22,9 @@ def check_pandas_only_methods(text: str) -> dict:
         for method in BANNED_METHODS:
             if re.search(rf"\.{method}\s*\(", block):
                 violations.append(method)
+        
+        if re.search(r"\w+\[[^\]]*\]", block):
+            violations.append("bracket_notation_instead_of_get()")
     
     return {
         "found_issues": len(violations) > 0,
@@ -32,6 +35,7 @@ def check_pandas_only_methods(text: str) -> dict:
 
 def validate_response(text: str, raise_on_violations: bool = False) -> tuple:
     result = check_pandas_only_methods(text)
+    print(f"Validation result: {result}")
     
     if raise_on_violations and result["found_issues"]:
         methods = ", ".join(result["violations"])
