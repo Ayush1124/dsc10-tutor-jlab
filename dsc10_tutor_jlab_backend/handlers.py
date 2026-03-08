@@ -1,13 +1,13 @@
 import json
 import traceback
 
+import tornado
 from jupyter_server.base.handlers import APIHandler
 from jupyter_server.utils import url_path_join
-import tornado
-from .tools.files_tool import ReadFileHandler, SearchFilesHandler
-from .tools.files_tool import ListFilesHandler
+
 from .agents.tutor_agent import ask_tutor
 from .practice_problems.handler import PracticeProblemsHandler
+from .tools.files_tool import ListFilesHandler, ReadFileHandler, SearchFilesHandler
 
 
 class RouteHandler(APIHandler):

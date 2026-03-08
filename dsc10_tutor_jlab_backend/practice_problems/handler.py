@@ -2,11 +2,11 @@ import json
 import logging
 import traceback
 
-from jupyter_server.base.handlers import APIHandler
 import tornado
+from jupyter_server.base.handlers import APIHandler
 
-from .retriever import get_practice_problems
 from .formatter import format_problems_response
+from .retriever import get_practice_problems
 
 logger = logging.getLogger(__name__)
 
