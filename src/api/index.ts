@@ -178,6 +178,46 @@ export async function getPracticeProblems({
   }
 }
 
+export interface IRandomExamQuestionResponse {
+  problem: {
+    id: string;
+    lecture_number: number;
+    text: string;
+    choices: string[];
+    images: string[];
+    code: string[];
+    source_url: string;
+    source?: string;
+    anchor_id?: string;
+  };
+}
+
+/**
+ * Get a random exam question from all available problems
+ *
+ * @returns The response from the API with a random problem
+ */
+export async function getRandomExamQuestion(): Promise<IRandomExamQuestionResponse> {
+  console.log('[Exam Mode] API: Requesting random exam question');
+
+  try {
+    const response = await requestAPI<IRandomExamQuestionResponse>(
+      'random-exam-question',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      }
+    );
+
+    console.log('[Exam Mode] API: Random exam question received:', response);
+    return response;
+  } catch (error) {
+    console.error('[Exam Mode] API: Error:', error);
+    throw error;
+  }
+}
+
 /* ===========================
    SLH implementation
    ===========================

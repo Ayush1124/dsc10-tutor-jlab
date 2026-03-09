@@ -1,12 +1,13 @@
 import json
 import logging
+import random
 import traceback
 
 import tornado
 from jupyter_server.base.handlers import APIHandler
 
 from .formatter import format_problems_response
-from .retriever import get_practice_problems
+from .retriever import get_practice_problems, load_problems_index
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +40,51 @@ class PracticeProblemsHandler(APIHandler):
                 "problems": problems,
                 "formatted_response": formatted_response,
                 "count": len(problems)
+            }
+            
+            self.finish(json.dumps(result))
+            
+        except Exception as e:
+            error_trace = traceback.format_exc()
+            self.set_status(500)
+            self.finish(json.dumps({
+                "error": str(e),
+                "traceback": error_trace
+            }))
+
+
+class RandomExamQuestionHandler(APIHandler):
+    
+    @tornado.web.authenticated
+    async def post(self):
+        try:
+            problems_index = load_problems_index()
+            
+            if not problems_index:
+                self.set_status(404)
+                self.finish(json.dumps({
+                    "error": "No exam questions available"
+                }))
+                return
+            
+            exam_problems = []
+            for lecture_problems in problems_index.values():
+                for problem in lecture_problems:
+                    source = problem.get("source", "")
+                    if source and ("final" in source.lower() or "midterm" in source.lower()):
+                        exam_problems.append(problem)
+            
+            if not exam_problems:
+                self.set_status(404)
+                self.finish(json.dumps({
+                    "error": "No exam questions available"
+                }))
+                return
+            
+            selected_problem = random.choice(exam_problems)
+            
+            result = {
+                "problem": selected_problem
             }
             
             self.finish(json.dumps(result))

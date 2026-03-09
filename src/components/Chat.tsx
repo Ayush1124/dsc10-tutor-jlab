@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useRef, useState } from 'react';
 
-import { askTutor, getPracticeProblems } from '@/api';
+import { askTutor, getPracticeProblems, getRandomExamQuestion } from '@/api';
 import { logEvent } from '@/api/logger';
 import { Button } from '@/components/ui/button';
 import { useNotebook } from '@/contexts/NotebookContext';
@@ -19,9 +19,8 @@ const PRACTICE_PATTERNS = practicePatternsJson.map(
 );
 
 const EXAM_PATTERNS = [
-  /(?:start|begin|do|run)?\s*(?:an\s+)?exam\s*mode\s*(?:on|about|for)?\s+(.+)/i,
-  /(?:give|show)\s+me\s+(?:an\s+)?exam\s+(?:question|problem)\s+(?:on|about|for)\s+(.+)/i,
-  /exam\s+(?:question|problem)\s+(?:on|about|for)\s+(.+)/i
+  /(?:start|begin|do|give|show)\s+(?:me\s+)?(?:an?\s+)?exam\s+(?:mode|question|problem)?/i,
+  /exam\b/i
 ];
 
 type PracticeProblem = Awaited<
@@ -29,18 +28,14 @@ type PracticeProblem = Awaited<
 >['problems'][number];
 
 type ExamSession = {
-  topic: string;
   problem: PracticeProblem;
   confidence?: string;
   stage: 'awaiting_confidence' | 'awaiting_submission';
 };
 
-const formatExamQuestion = (
-  problem: PracticeProblem,
-  topic: string
-): string => {
+const formatExamQuestion = (problem: PracticeProblem): string => {
   const lines: string[] = [];
-  lines.push(`## Exam Mode: ${topic}`);
+  lines.push(`## Exam Mode`);
   lines.push(
     'You will get **one** question and then submit your answer for grading.'
   );
@@ -89,7 +84,6 @@ const buildExamSubmissionPrompt = (
     '## Correct Answer',
     '## Why',
     '',
-    `Topic: ${session.topic}`,
     `Student confidence: ${session.confidence || 'Not provided'}`,
     '',
     'Question:',
@@ -135,19 +129,12 @@ export default function Chat() {
     return { isPractice: false };
   };
 
-  const isExamRequest = (
-    query: string
-  ): { isExam: boolean; topic?: string } => {
+  const isExamRequest = (query: string): { isExam: boolean } => {
     for (const pattern of EXAM_PATTERNS) {
-      const match = query.match(pattern);
-      if (match && match[1]) {
-        const topic = match[1].trim();
-        if (topic.length > 2) {
-          return { isExam: true, topic };
-        }
+      if (pattern.test(query)) {
+        return { isExam: true };
       }
     }
-
     return { isExam: false };
   };
 
@@ -171,7 +158,7 @@ export default function Chat() {
             event_type: 'exam_mode_confidence',
             payload: {
               confidence_text: text,
-              topic_query: examSession.topic,
+              problem_id: examSession.problem.id,
               notebook: notebookName,
               conversation_id: conversationId
             }
@@ -211,7 +198,6 @@ export default function Chat() {
         logEvent({
           event_type: 'exam_mode_graded',
           payload: {
-            topic_query: examSession.topic,
             problem_id: examSession.problem.id,
             confidence_text: examSession.confidence,
             student_submission: text,
@@ -230,53 +216,47 @@ export default function Chat() {
       }
 
       const examCheck = isExamRequest(text);
-      if (examCheck.isExam && examCheck.topic !== undefined) {
-        const practiceResponse = await getPracticeProblems({
-          topic_query: examCheck.topic
-        });
+      if (examCheck.isExam) {
+        try {
+          const examResponse = await getRandomExamQuestion();
 
-        if (
-          !practiceResponse.problems ||
-          practiceResponse.problems.length === 0
-        ) {
+          const selectedProblem = examResponse.problem;
+
+          setExamSession({
+            problem: selectedProblem,
+            stage: 'awaiting_confidence'
+          });
+
+          logEvent({
+            event_type: 'exam_mode_started',
+            payload: {
+              problem_id: selectedProblem.id,
+              notebook: notebookName,
+              conversation_id: conversationId
+            }
+          });
+
           setMessages(prev => [
             ...prev,
             {
               author: 'tutor',
-              text: `I couldn't find an exam-style question for **${examCheck.topic}**. Try another topic.`
+              text: formatExamQuestion(selectedProblem)
             }
           ]);
-          return;
+        } catch (error) {
+          console.error('Error starting exam mode:', error);
+          const errorMessage =
+            error instanceof Error
+              ? error.message
+              : 'Could not load an exam question. Please try again.';
+          setMessages(prev => [
+            ...prev,
+            {
+              author: 'tutor',
+              text: `Error: ${errorMessage}`
+            }
+          ]);
         }
-
-        const selectedProblem =
-          practiceResponse.problems[
-            Math.floor(Math.random() * practiceResponse.problems.length)
-          ];
-
-        setExamSession({
-          topic: examCheck.topic,
-          problem: selectedProblem,
-          stage: 'awaiting_confidence'
-        });
-
-        logEvent({
-          event_type: 'exam_mode_started',
-          payload: {
-            topic_query: examCheck.topic,
-            problem_id: selectedProblem.id,
-            notebook: notebookName,
-            conversation_id: conversationId
-          }
-        });
-
-        setMessages(prev => [
-          ...prev,
-          {
-            author: 'tutor',
-            text: formatExamQuestion(selectedProblem, examCheck.topic as string)
-          }
-        ]);
         return;
       }
 

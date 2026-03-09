@@ -6,7 +6,10 @@ from jupyter_server.base.handlers import APIHandler
 from jupyter_server.utils import url_path_join
 
 from .agents.tutor_agent import ask_tutor
-from .practice_problems.handler import PracticeProblemsHandler
+from .practice_problems.handler import (
+    PracticeProblemsHandler,
+    RandomExamQuestionHandler,
+)
 from .tools.files_tool import ListFilesHandler, ReadFileHandler, SearchFilesHandler
 
 
@@ -68,6 +71,9 @@ def setup_handlers(web_app):
     practice_problems_pattern = url_path_join(
         base_url, "dsc10-tutor-jlab-backend", "practice-problems"
     )
+    random_exam_pattern = url_path_join(
+        base_url, "dsc10-tutor-jlab-backend", "random-exam-question"
+    )
     handlers = [
         (route_pattern, RouteHandler),
         (read_file_pattern, ReadFileHandler),
@@ -75,5 +81,6 @@ def setup_handlers(web_app):
         (list_files_pattern, ListFilesHandler),
         (ask_pattern, AskHandler),
         (practice_problems_pattern, PracticeProblemsHandler),
+        (random_exam_pattern, RandomExamQuestionHandler),
     ]
     web_app.add_handlers(host_pattern, handlers)
