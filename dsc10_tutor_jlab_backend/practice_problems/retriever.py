@@ -11,6 +11,7 @@ DATA_DIR = Path(__file__).parent.parent / "data"
 PROBLEMS_FILE = DATA_DIR / "lecture_problems.json"
 
 _PROBLEMS_INDEX = None
+_EXAM_SOURCE_KEYWORDS = ("midterm", "final")
 
 
 def load_problems_index() -> Dict[int, List[Dict]]:
@@ -26,6 +27,35 @@ def load_problems_index() -> Dict[int, List[Dict]]:
         _PROBLEMS_INDEX = json.load(f)
         _PROBLEMS_INDEX = {int(k): v for k, v in _PROBLEMS_INDEX.items()}
         return _PROBLEMS_INDEX
+
+
+def is_previous_exam_problem(problem: Dict) -> bool:
+    """Return whether a problem came from a previous midterm or final."""
+    source = problem.get("source")
+
+    if not isinstance(source, str):
+        return False
+
+    normalized_source = source.lower()
+    return any(keyword in normalized_source for keyword in _EXAM_SOURCE_KEYWORDS)
+
+
+def get_previous_exam_problems() -> List[Dict]:
+    """Return all problems sourced from previous midterms and finals."""
+    problems_index = load_problems_index()
+
+    if not problems_index:
+        return []
+
+    exam_problems = []
+    for lecture_problems in problems_index.values():
+        exam_problems.extend(
+            problem
+            for problem in lecture_problems
+            if is_previous_exam_problem(problem)
+        )
+
+    return exam_problems
 
 
 def get_practice_problems(

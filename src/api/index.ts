@@ -193,12 +193,14 @@ export interface IRandomExamQuestionResponse {
 }
 
 /**
- * Get a random exam question from all available problems
+ * Get a random question from previous exams only (midterms and finals)
  *
- * @returns The response from the API with a random problem
+ * @returns The response from the API with a random previous-exam problem
  */
 export async function getRandomExamQuestion(): Promise<IRandomExamQuestionResponse> {
-  console.log('[Exam Mode] API: Requesting random exam question');
+  console.log(
+    '[Exam Mode] API: Requesting random question from previous exams'
+  );
 
   try {
     const response = await requestAPI<IRandomExamQuestionResponse>(
@@ -210,7 +212,7 @@ export async function getRandomExamQuestion(): Promise<IRandomExamQuestionRespon
       }
     );
 
-    console.log('[Exam Mode] API: Random exam question received:', response);
+    console.log('[Exam Mode] API: Previous-exam question received:', response);
     return response;
   } catch (error) {
     console.error('[Exam Mode] API: Error:', error);

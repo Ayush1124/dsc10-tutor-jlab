@@ -7,7 +7,7 @@ import tornado
 from jupyter_server.base.handlers import APIHandler
 
 from .formatter import format_problems_response
-from .retriever import get_practice_problems, load_problems_index
+from .retriever import get_practice_problems, get_previous_exam_problems
 
 logger = logging.getLogger(__name__)
 
@@ -58,22 +58,8 @@ class RandomExamQuestionHandler(APIHandler):
     @tornado.web.authenticated
     async def post(self):
         try:
-            problems_index = load_problems_index()
-            
-            if not problems_index:
-                self.set_status(404)
-                self.finish(json.dumps({
-                    "error": "No exam questions available"
-                }))
-                return
-            
-            exam_problems = []
-            for lecture_problems in problems_index.values():
-                for problem in lecture_problems:
-                    source = problem.get("source", "")
-                    if source and ("final" in source.lower() or "midterm" in source.lower()):
-                        exam_problems.append(problem)
-            
+            exam_problems = get_previous_exam_problems()
+
             if not exam_problems:
                 self.set_status(404)
                 self.finish(json.dumps({
