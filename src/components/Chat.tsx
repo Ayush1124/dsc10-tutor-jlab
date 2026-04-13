@@ -9,14 +9,14 @@ import {
 } from '@/api';
 
 import { logEvent } from '@/api/logger';
+import { Button } from '@/components/ui/button';
+import { useNotebook } from '@/contexts/NotebookContext';
 import {
   ACTIVE_EXPERIMENT,
   assignVariant,
   getStudentKey,
   hashStudentKey
 } from '@/utils/abTesting';
-import { Button } from '@/components/ui/button';
-import { useNotebook } from '@/contexts/NotebookContext';
 import { enhanceQuestion } from '@/utils/enhancedQuestionUtils';
 import { chatgptOverride, tutorInstruction } from '@/utils/prompts';
 import ChatMessageBox from './ChatMessageBox';
@@ -59,6 +59,7 @@ export default function Chat() {
   const initialNotebookSnapshotRef = useRef<string | undefined>(undefined);
   const abortStreamRef = useRef<(() => void) | null>(null);
   const examModeStartTimestampRef = useRef<number | null>(null);
+  const examModeActivationIdRef = useRef<string | null>(null);
 
   type FrontendPromptMode = 'tutor' | 'chatgpt' | 'none';
   const [mode, setMode] = useState<FrontendPromptMode>('tutor');
@@ -201,6 +202,8 @@ export default function Chat() {
         payload: {
           original_query: studentText,
           exam_name: examResponse.problem.exam_name,
+          student_key_hash: studentKeyHashRef.current,
+          exam_mode_activation_id: examModeActivationIdRef.current,
           notebook: notebookName
         }
       });
@@ -226,6 +229,7 @@ export default function Chat() {
         payload: {
           question: text,
           mode,
+          student_key_hash: studentKeyHashRef.current,
           conversation_id: conversationId,
           notebook: notebookName,
           ...(ACTIVE_EXPERIMENT === 'exp_follow_up' && {
@@ -292,6 +296,8 @@ export default function Chat() {
           logEvent({
             event_type: 'exam_mode_ended',
             payload: {
+              student_key_hash: studentKeyHashRef.current,
+              exam_mode_activation_id: examModeActivationIdRef.current,
               notebook: notebookName,
               conversation_id: conversationId,
               timestamp: examEndTimestamp,
@@ -300,6 +306,19 @@ export default function Chat() {
               })
             }
           });
+          if (durationMs !== null) {
+            logEvent({
+              event_type: 'exam_mode_duration',
+              payload: {
+                student_key_hash: studentKeyHashRef.current,
+                exam_mode_activation_id: examModeActivationIdRef.current,
+                notebook: notebookName,
+                conversation_id: conversationId,
+                timestamp: examEndTimestamp,
+                duration_seconds: Math.round(durationMs / 1000)
+              }
+            });
+          }
           if (ACTIVE_EXPERIMENT === 'exp_exam_mode') {
             logEvent({
               event_type: 'exp_exam_mode_duration',
@@ -307,6 +326,7 @@ export default function Chat() {
                 experiment_id: ACTIVE_EXPERIMENT,
                 variant,
                 student_key_hash: studentKeyHashRef.current,
+                exam_mode_activation_id: examModeActivationIdRef.current,
                 notebook: notebookName,
                 timestamp: examEndTimestamp,
                 ...(durationMs !== null && {
@@ -315,6 +335,7 @@ export default function Chat() {
               }
             });
           }
+          examModeActivationIdRef.current = null;
           return;
         }
 
@@ -332,6 +353,19 @@ export default function Chat() {
         ]);
         return;
       } else if (isExamModeStartRequest(text)) {
+        logEvent({
+          event_type: 'exam_mode_attempt',
+          payload: {
+            student_key_hash: studentKeyHashRef.current,
+            notebook: notebookName,
+            conversation_id: conversationId,
+            allowed: shouldActivateExamMode,
+            ...(ACTIVE_EXPERIMENT && {
+              experiment_id: ACTIVE_EXPERIMENT,
+              variant
+            })
+          }
+        });
         if (!shouldActivateExamMode) {
           setMessages(prev => [
             ...prev,
@@ -345,6 +379,9 @@ export default function Chat() {
         }
         const examStartTimestamp = new Date().toISOString();
         examModeStartTimestampRef.current = Date.now();
+        examModeActivationIdRef.current = `${Date.now()}-${Math.random()
+          .toString(36)
+          .slice(2, 10)}`;
         setIsExamModeActive(true);
         setMessages(prev => [
           ...prev,
@@ -356,6 +393,8 @@ export default function Chat() {
         logEvent({
           event_type: 'exam_mode_started',
           payload: {
+            student_key_hash: studentKeyHashRef.current,
+            exam_mode_activation_id: examModeActivationIdRef.current,
             notebook: notebookName,
             conversation_id: conversationId,
             timestamp: examStartTimestamp
@@ -368,6 +407,7 @@ export default function Chat() {
               experiment_id: ACTIVE_EXPERIMENT,
               variant,
               student_key_hash: studentKeyHashRef.current,
+              exam_mode_activation_id: examModeActivationIdRef.current,
               notebook: notebookName,
               timestamp: examStartTimestamp
             }
@@ -389,6 +429,7 @@ export default function Chat() {
           payload: {
             original_query: text,
             topic_query: text,
+            student_key_hash: studentKeyHashRef.current,
             notebook: notebookName,
             problem_count: practiceResponse.count,
             formatted_response: practiceResponse.formatted_response
@@ -533,6 +574,19 @@ export default function Chat() {
                     }
                   });
                 }
+                logEvent({
+                  event_type: 'lectures_impression',
+                  payload: {
+                    student_key_hash: studentKeyHashRef.current,
+                    lecture_count: event.relevant_lectures.length,
+                    conversation_id: conversationId,
+                    notebook: notebookName,
+                    ...(ACTIVE_EXPERIMENT && {
+                      experiment_id: ACTIVE_EXPERIMENT,
+                      variant
+                    })
+                  }
+                });
               }
             } else if (event.type === 'follow_up') {
               if (
@@ -540,6 +594,18 @@ export default function Chat() {
                 (ACTIVE_EXPERIMENT === 'exp_follow_up' && variant === 'B')
               ) {
                 setSuggestion(event.text);
+                logEvent({
+                  event_type: 'follow_up_impression',
+                  payload: {
+                    student_key_hash: studentKeyHashRef.current,
+                    conversation_id: conversationId,
+                    notebook: notebookName,
+                    ...(ACTIVE_EXPERIMENT && {
+                      experiment_id: ACTIVE_EXPERIMENT,
+                      variant
+                    })
+                  }
+                });
                 if (ACTIVE_EXPERIMENT === 'exp_follow_up') {
                   logEvent({
                     event_type: 'exp_follow_up_impression',
@@ -669,6 +735,7 @@ export default function Chat() {
     loggedNotebookJsonForConversationIdRef.current = undefined;
     acceptedFollowUpRef.current = null;
     examModeStartTimestampRef.current = null;
+    examModeActivationIdRef.current = null;
     setNotebookLoaded(false);
     setShouldResetNext(true);
   };
